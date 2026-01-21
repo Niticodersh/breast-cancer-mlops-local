@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: breast-cancer-api
+  labels:
+    app: breast-cancer-api
+spec:
+  replicas: 3  # Let's scale to 3 pods for fun
+  selector:
+    matchLabels:
+      app: breast-cancer-api
+  template:
+    metadata:
+      labels:
+        app: breast-cancer-api
+    spec:
+      containers:
+      - name: fastapi
+        image: breast-cancer-fastapi:latest
+        imagePullPolicy: Never  # Use the loaded local image
+        ports:
+        - containerPort: 8000
+        - containerPort: 8001
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 15
+          periodSeconds: 10
