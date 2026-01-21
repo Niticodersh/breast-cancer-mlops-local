@@ -46,15 +46,25 @@ class PredictionRequest(BaseModel):
         return v
 
 # ----------------------------- Load Artifacts at Startup -----------------------------
-MODEL_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "model")
+# Robust path: works both locally and in Docker container
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, "..", ".."))  # Local project root
+MODEL_DIR = os.path.join(PROJECT_ROOT, "model") if os.path.exists(os.path.join(PROJECT_ROOT, "model")) else os.path.join(CURRENT_DIR, "model")
 
 try:
-    model = joblib.load(os.path.join(MODEL_DIR, "model.joblib"))
-    scaler = joblib.load(os.path.join(MODEL_DIR, "scaler.joblib"))
-    feature_names = joblib.load(os.path.join(MODEL_DIR, "feature_names.joblib"))
-    print("Model, scaler, and feature names loaded successfully")
+    model_path = os.path.join(MODEL_DIR, "model.joblib")
+    scaler_path = os.path.join(MODEL_DIR, "scaler.joblib")
+    features_path = os.path.join(MODEL_DIR, "feature_names.joblib")
+
+    model = joblib.load(model_path)
+    scaler = joblib.load(scaler_path)
+    feature_names = joblib.load(features_path)
+
+    print("Model artifacts loaded successfully from:")
+    print(f"   {MODEL_DIR}")
+
 except Exception as e:
-    print(f"Error loading artifacts: {e}")
+    print(f"Error loading artifacts from {MODEL_DIR}: {e}")
     raise
 
 # ----------------------------- Endpoints -----------------------------
