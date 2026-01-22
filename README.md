@@ -128,7 +128,7 @@ Before running this project, ensure you have:
 ### 1. Clone the Repository
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/Niticodersh/breast-cancer-mlops-local.git
 cd breast-cancer-mlops-local
 ```
 
