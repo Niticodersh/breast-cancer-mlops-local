@@ -4,4 +4,4 @@ global:
 scrape_configs:
   - job_name: 'breast-cancer-api'
     static_configs:
-      - targets: ['host.docker.internal:64712']  # Scrapes your K8s service metrics port
+      - targets: ['host.docker.internal:54762']  # Scrapes your K8s service metrics port

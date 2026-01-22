@@ -272,9 +272,160 @@ minikube service breast-cancer-service
 
 4. **Canary Deployment** (optional):
 
+A canary deployment allows you to test a new version of your application alongside the stable version, with only a small percentage of traffic routed to the canary.
+
+**What is Canary Deployment?**
+
+Canary deployment is a strategy where you deploy a new version of your application (canary) alongside the existing stable version. Traffic is automatically split between both versions based on the number of replicas. This allows you to:
+- Test new versions in production with minimal risk
+- Monitor canary performance before full rollout
+- Quickly rollback by scaling down the canary
+
+**How It Works:**
+
+The existing service (`breast-cancer-service`) selects pods with label `app: breast-cancer-api`. Both the stable deployment and canary deployment use this label, so traffic is automatically distributed between them based on replica counts.
+
+**Example:** If stable has 3 replicas and canary has 1 replica, approximately 25% of traffic goes to canary (1/4) and 75% to stable (3/4).
+
+**Steps to Deploy Canary:**
+
+1. **Deploy the canary version:**
+
 ```bash
 kubectl apply -f k8s/canary-deployment.yaml
 ```
+
+2. **Verify canary deployment:**
+
+```bash
+# Check canary pods are running
+kubectl get pods -l version=canary
+
+# Check all pods (stable + canary)
+kubectl get pods -l app=breast-cancer-api
+
+# View canary deployment status
+kubectl get deployment breast-cancer-api-canary
+```
+
+3. **Monitor canary performance:**
+
+```bash
+# Watch canary pod logs
+kubectl logs -f -l version=canary
+
+# Check canary pod resource usage
+kubectl top pods -l version=canary
+```
+
+4. **Test canary with API calls:**
+
+Make requests to the service endpoint. Traffic will be automatically split between stable and canary versions:
+
+```bash
+# Test the API (traffic will be split)
+curl http://localhost:30000/health
+curl -X POST "http://localhost:30000/predict" \
+  -H "Content-Type: application/json" \
+  -d '{"features": [17.99, 10.38, 122.8, 1001.0, 0.1184, 0.2776, 0.3001, 0.1471, 0.2419, 0.07871, 1.095, 0.9053, 8.589, 153.4, 0.006399, 0.04904, 0.05373, 0.01587, 0.03003, 0.006193, 25.38, 17.33, 184.6, 2019.0, 0.1622, 0.6656, 0.7119, 0.2654, 0.4601, 0.1189]}'
+```
+
+**Verifying Canary Deployment:**
+
+The health endpoint includes a `version` field that indicates whether the request was handled by the stable or canary deployment. This makes it easy to verify that traffic is being split correctly.
+
+**Example verification:**
+
+```bash
+# Make multiple requests to see traffic distribution
+curl http://127.0.0.1:54761/health
+# Response: {"status":"healthy","model":"SVM loaded","version":"stable"}
+
+curl http://127.0.0.1:54761/health
+# Response: {"status":"healthy","model":"SVM loaded","version":"stable"}
+
+curl http://127.0.0.1:54761/health
+# Response: {"status":"healthy","model":"SVM loaded","version":"canary"}
+
+curl http://127.0.0.1:54761/health
+# Response: {"status":"healthy","model":"SVM loaded","version":"stable"}
+```
+
+As you make multiple requests, you'll see responses alternating between `"version":"stable"` and `"version":"canary"`, confirming that:
+- The canary deployment is running and receiving traffic
+- Traffic is being distributed between stable and canary based on replica counts
+- Both versions are healthy and responding correctly
+
+**Expected behavior:**
+- With 3 stable replicas and 1 canary replica, approximately 75% of requests will show `"version":"stable"` and 25% will show `"version":"canary"`
+- The distribution may vary slightly due to Kubernetes load balancing, but you should see canary responses in the mix
+
+5. **Adjust traffic split (optional):**
+
+To change the traffic percentage:
+- **Increase canary traffic**: Scale up canary replicas
+  ```bash
+  kubectl scale deployment breast-cancer-api-canary --replicas=2
+  ```
+- **Decrease canary traffic**: Scale down canary replicas
+  ```bash
+  kubectl scale deployment breast-cancer-api-canary --replicas=1
+  ```
+
+6. **Promote canary to stable (if successful):**
+
+If the canary performs well, you can promote it:
+
+```bash
+# Option 1: Scale up canary and scale down stable
+kubectl scale deployment breast-cancer-api-canary --replicas=3
+kubectl scale deployment breast-cancer-api --replicas=0
+
+# Option 2: Update stable deployment with canary image and delete canary
+kubectl set image deployment/breast-cancer-api fastapi=breast-cancer-fastapi:latest
+kubectl delete deployment breast-cancer-api-canary
+```
+
+7. **Rollback canary (if issues detected):**
+
+If the canary has issues, quickly remove it:
+
+```bash
+kubectl delete deployment breast-cancer-api-canary
+```
+
+**Canary Deployment Configuration:**
+
+The canary deployment (`k8s/canary-deployment.yaml`) includes:
+- **1 replica** (can be adjusted for desired traffic split)
+- **Same app label** (`app: breast-cancer-api`) so service routes to it
+- **Canary version label** (`version: canary`) for easy identification
+- **Health checks** (readiness and liveness probes)
+- **Same ports** as stable deployment
+
+**Traffic Distribution Example:**
+
+| Stable Replicas | Canary Replicas | Stable Traffic | Canary Traffic |
+|----------------|----------------|----------------|----------------|
+| 3 | 1 | ~75% | ~25% |
+| 3 | 2 | ~60% | ~40% |
+| 2 | 1 | ~67% | ~33% |
+| 3 | 3 | ~50% | ~50% |
+
+**Monitoring Canary:**
+
+Use Prometheus and Grafana to compare metrics between stable and canary:
+- Request rates
+- Error rates
+- Latency differences
+- Prediction accuracy (if applicable)
+
+**Best Practices:**
+
+- Start with 1 canary replica (minimal traffic)
+- Monitor for at least 15-30 minutes before promoting
+- Watch for errors, latency spikes, or performance degradation
+- Use labels to filter metrics: `version=canary` vs `version=stable`
 
 ### Option 5: Set Up Monitoring Stack (Prometheus + Grafana)
 
@@ -355,6 +506,89 @@ When using `minikube service`, keep the terminal open because it maintains the t
    - Ensure the Prometheus data source URL is set to: `http://prometheus:9090`
 
 Once the target is **UP**, Prometheus is successfully scraping metrics from your FastAPI service.
+
+#### Grafana Setup and Dashboard Configuration
+
+Grafana is used to visualize metrics collected by Prometheus, such as request rate, prediction latency, and prediction distribution.
+
+**1. Access Grafana**
+
+Once the monitoring stack is running:
+
+- **Grafana UI**: http://localhost:3001
+- **Username**: `admin`
+- **Password**: `admin`
+
+You will be prompted to change the password on first login.
+
+**2. Add Prometheus as a Data Source**
+
+Grafana does not automatically know about Prometheus. You must add it manually.
+
+**Steps:**
+
+1. Open Grafana at http://localhost:3001
+2. Go to **Configuration → Data Sources**
+3. Click **Add data source**
+4. Select **Prometheus**
+5. Set the URL to: `http://prometheus:9090`
+6. Click **Save & Test**
+
+You should see a confirmation message: **Data source is working**
+
+**3. Verify Metrics Are Available**
+
+To confirm Grafana can read metrics from Prometheus:
+
+1. Go to **Explore**
+2. Select **Prometheus** as the data source
+3. Run the following query:
+
+```
+app_requests_total
+```
+
+If data is returned, Grafana is successfully connected to Prometheus.
+
+**4. Import Grafana Dashboards (Optional but Recommended)**
+
+Predefined dashboards can be imported to visualize metrics easily.
+
+**Steps:**
+
+1. Go to **Dashboards → Import**
+2. Either:
+   - Import a dashboard JSON from `monitoring/grafana-dashboards/`, or
+   - Import dashboard ID **22676** from Grafana.com (enter `22676` in the "Import via grafana.com" field)
+3. Select **Prometheus** as the data source
+4. Click **Import**
+
+**5. Generate Traffic to See Metrics**
+
+Metrics appear only when requests are made to the API.
+
+1. Open FastAPI Swagger UI:
+   - http://localhost:30000/docs
+   - or (if using minikube service tunnel): http://127.0.0.1:`<API_PORT>`/docs
+2. Execute the `/predict` endpoint multiple times.
+
+Grafana dashboards will update in real time showing:
+- Request count
+- Prediction latency
+- Prediction distribution (benign vs malignant)
+
+**What Grafana Is Visualizing in This Project**
+
+Grafana dashboards visualize the following Prometheus metrics exposed by the FastAPI service:
+
+- **Request Count**: `app_requests_total{endpoint, method}`
+- **Prediction Latency**: `app_prediction_latency_seconds` (histogram)
+- **Prediction Distribution**: `app_predictions_total{prediction}`
+
+These metrics provide visibility into:
+- API traffic
+- Model inference performance
+- Prediction behavior
 
 ---
 

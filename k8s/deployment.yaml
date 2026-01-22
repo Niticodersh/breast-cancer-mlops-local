@@ -18,6 +18,9 @@ spec:
       - name: fastapi
         image: breast-cancer-fastapi:latest
         imagePullPolicy: Never  # Use the loaded local image
+        env:
+        - name: VERSION
+          value: "stable"
         ports:
         - containerPort: 8000
         - containerPort: 8001

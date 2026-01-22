@@ -9,6 +9,9 @@ from pydantic import BaseModel, ValidationError
 from typing import List
 from prometheus_client import Counter, Histogram, start_http_server
 
+
+VERSION = os.getenv("VERSION", "unknown")
+
 # ----------------------------- Metrics Setup -----------------------------
 # Prometheus metrics (will be exposed at /metrics)
 REQUEST_COUNT = Counter(
@@ -68,10 +71,21 @@ except Exception as e:
     raise
 
 # ----------------------------- Endpoints -----------------------------
+# @app.get("/health")
+# async def health_check():
+#     REQUEST_COUNT.labels(endpoint="/health", method="GET").inc()
+#     return {"status": "healthy", "model": "SVM loaded"}
+
+
 @app.get("/health")
 async def health_check():
     REQUEST_COUNT.labels(endpoint="/health", method="GET").inc()
-    return {"status": "healthy", "model": "SVM loaded"}
+    return {
+        "status": "healthy",
+        "model": "SVM loaded",
+        "version": VERSION
+    }
+
 
 @app.post("/predict")
 async def predict(request: PredictionRequest):

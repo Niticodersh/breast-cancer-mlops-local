@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: breast-cancer-api-canary
+  labels:
+    app: breast-cancer-api
+    version: canary
+spec:
+  replicas: 1  # Canary typically runs with fewer replicas
+  selector:
+    matchLabels:
+      app: breast-cancer-api
+      version: canary
+  template:
+    metadata:
+      labels:
+        app: breast-cancer-api
+        version: canary
+    spec:
+      containers:
+      - name: fastapi
+        image: breast-cancer-fastapi:latest  # Can use a different image tag for new version
+        imagePullPolicy: Never
+        env:
+        - name: VERSION
+          value: "canary"
+        ports:
+        - containerPort: 8000
+        - containerPort: 8001
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 15
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
