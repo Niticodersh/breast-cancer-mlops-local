@@ -276,21 +276,85 @@ minikube service breast-cancer-service
 kubectl apply -f k8s/canary-deployment.yaml
 ```
 
-### Option 5: Set Up Monitoring Stack
+### Option 5: Set Up Monitoring Stack (Prometheus + Grafana)
 
-Start Prometheus and Grafana:
+Start Prometheus and Grafana using Docker Compose:
 
 ```bash
-cd monitoring
-docker-compose up -d
+docker-compose -f monitoring/docker-compose.yml up -d
 ```
 
 **Access Points:**
-- **Prometheus**: http://localhost:9090
-- **Grafana**: http://localhost:3001
-  - Default credentials: `admin` / `admin` (change on first login)
+- **Prometheus UI**: http://localhost:9090
+- **Grafana UI**: http://localhost:3001
+- **Default credentials**: `admin` / `admin` (Grafana will ask to change the password on first login)
 
-**Configure Prometheus** to scrape metrics from your API by updating `monitoring/prometheus.yml` with the correct target address.
+#### Configure Prometheus to Scrape API Metrics
+
+Prometheus must know where your FastAPI metrics endpoint is running. This depends on how Minikube exposes the service.
+
+**Case 1: Metrics accessible on fixed NodePort (30001)**
+
+(If `http://localhost:30001/metrics` works directly)
+
+Update `monitoring/prometheus.yml` as follows:
+
+```yaml
+scrape_configs:
+  - job_name: 'breast-cancer-api'
+    static_configs:
+      - targets: ['host.docker.internal:30001']
+```
+
+**Case 2: NodePort 30001 is NOT accessible (Docker driver on Windows)**
+
+If `localhost:30001` does not open, use Minikube's service tunnel.
+
+Run the following command first:
+
+```bash
+minikube service breast-cancer-service
+```
+
+This will output URLs similar to:
+
+```
+http://127.0.0.1:64079   # API
+http://127.0.0.1:64080   # Metrics
+```
+
+Copy the metrics port (for example, `64080`).
+
+Update `monitoring/prometheus.yml` using that port:
+
+```yaml
+scrape_configs:
+  - job_name: 'breast-cancer-api'
+    static_configs:
+      - targets: ['host.docker.internal:64080']
+```
+
+Restart the monitoring stack to apply changes:
+
+```bash
+docker-compose -f monitoring/docker-compose.yml down
+docker-compose -f monitoring/docker-compose.yml up -d
+```
+
+⚠️ **Important:**
+When using `minikube service`, keep the terminal open because it maintains the tunnel.
+
+#### Verification
+
+1. **Open Prometheus targets page:**
+   - http://localhost:9090/targets
+   - You should see: `breast-cancer-api   UP`
+
+2. **Open Grafana:**
+   - http://localhost:3001
+   - Ensure the Prometheus data source URL is set to: `http://prometheus:9090`
+
+Once the target is **UP**, Prometheus is successfully scraping metrics from your FastAPI service.
 
 ---
 
